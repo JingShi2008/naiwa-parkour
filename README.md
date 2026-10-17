@@ -7,7 +7,7 @@
 ## 在线玩
 
 - GitHub Pages：<https://jingshi2008.github.io/naiwa-parkour/>
-- 自定义域名（注册后生效）：`岭南奶龙大学.com`
+- 自定义域名（实名审核通过并解析后生效）：`岭南奶龙大学.cn`（punycode `xn--6kr28k0gz4ev3b8y2s.cn`）
 
 ## 怎么玩
 
