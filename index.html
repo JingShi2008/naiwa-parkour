@@ -115,8 +115,8 @@
     50% { transform:rotate(1.6deg) translateY(-.18em); }
   }
 
-  /* ---------- 触屏 ---------- */
-  #touch { position:absolute; inset:0; z-index:18; pointer-events:none; }
+  /* ---------- 触屏（挂在 body 上，竖屏时铺满屏幕底部当操作台） ---------- */
+  #touch { position:fixed; inset:0; z-index:18; pointer-events:none; font-size:16px; }
   .tzone { position:absolute; bottom:1.1em; display:flex; gap:1em; pointer-events:none; }
   .tzone.left { left:1.1em; } .tzone.right { right:1.1em; }
   .tbtn { pointer-events:auto; width:4.1em; height:4.1em; border-radius:50%; border:.16em solid rgba(255,255,255,.75);
@@ -126,8 +126,29 @@
   .tbtn.pressed { background:rgba(247,200,92,.75); transform:scale(.94); }
   #btn-jump { width:4.6em; height:4.6em; font-size:1.05em; }
 
+  /* ---------- 竖屏手机专用布局（画布贴顶全宽，下半屏做操作台） ---------- */
+  body.pmobile { background:linear-gradient(180deg,#171310 0%,#FFFAEB 22%,#FFF3D4 55%,#FFE7B4 100%); }
+  body.pmobile #stage { left:0; top:0; transform:none; border-radius:0; box-shadow:none; }
+  body.pmobile .overlay { position:fixed; }
+  body.pmobile .panel, body.pmobile .menu-card, body.pmobile .go-panel { max-width:88vw; }
+  body.pmobile .tzone { bottom:calc(1.6em + env(safe-area-inset-bottom)); }
+  body.pmobile .tbtn { width:4.4em; height:4.4em; font-size:1em;
+    background:rgba(255,255,255,.62); border-color:rgba(122,82,48,.3); }
+  body.pmobile #btn-jump { width:5em; height:5em; font-size:1.1em; }
+  body.pmobile #rotate-tip { bottom:calc(1.6em + 6.6em + env(safe-area-inset-bottom)); }
+
+  /* 竖屏操作台的信息区（桌面不显示） */
+  #deck { display:none; position:fixed; left:0; right:0; z-index:17; pointer-events:none;
+    text-align:center; font-size:16px;
+    bottom:calc(9.4em + env(safe-area-inset-bottom)); }
+  body.pmobile #deck { display:block; }
+  body.pm-overlay #deck { display:none; }
+  #deck .d-title { font-size:1.5em; font-weight:800; color:#7A5230; letter-spacing:.22em; text-indent:.22em; }
+  #deck .d-help { font-size:.85em; color:#A47C4A; margin-top:.45em; line-height:1.8; }
+  #deck .d-disc { font-size:.72em; color:#C4A875; margin-top:.5em; letter-spacing:.16em; }
+
   /* ---------- 其他 ---------- */
-  #rotate-tip { position:absolute; left:50%; bottom:1.2em; transform:translateX(-50%); z-index:16;
+  #rotate-tip { position:fixed; left:50%; bottom:1.2em; transform:translateX(-50%); z-index:16;
     background:rgba(255,251,235,.9); color:#8A6231; font-size:.85em; font-weight:600;
     padding:.45em 1.1em; border-radius:2em; box-shadow:0 .2em .6em rgba(140,100,40,.25);
     display:none; pointer-events:none; }
@@ -211,19 +232,6 @@
     </div>
   </div>
 
-  <div id="touch" class="hidden">
-    <div class="tzone left">
-      <button id="btn-left" class="tbtn">◀</button>
-      <button id="btn-right" class="tbtn">▶</button>
-    </div>
-    <div class="tzone right">
-      <button id="btn-run" class="tbtn">跑</button>
-      <button id="btn-jump" class="tbtn">跳</button>
-    </div>
-  </div>
-
-  <div id="rotate-tip">↻ 横屏体验更佳</div>
-
   <div id="loading" class="overlay">
     <div class="load-card">
       <img id="load-mascot" alt="奶蛙园加载中">
@@ -254,6 +262,24 @@
   </div>
 </div>
 
+<div id="touch" class="hidden">
+  <div class="tzone left">
+    <button id="btn-left" class="tbtn">◀</button>
+    <button id="btn-right" class="tbtn">▶</button>
+  </div>
+  <div class="tzone right">
+    <button id="btn-run" class="tbtn">跑</button>
+    <button id="btn-jump" class="tbtn">跳</button>
+  </div>
+</div>
+<div id="rotate-tip">竖屏也能畅玩 · 横屏视野更宽</div>
+
+<div id="deck">
+  <div class="d-title">奶蛙园</div>
+  <div class="d-help">左下 ◀ ▶ 移动 · 右下 跑 / 跳（跳可二段跳）</div>
+  <div class="d-disc">非官方趣味作品</div>
+</div>
+
 <script>
 (function(){
 'use strict';
@@ -276,20 +302,38 @@ function rrect(x,y,w,h,r){
 }
 
 /* ================= 缩放适配 ================= */
+/* 竖屏操作台信息区：有弹层（菜单/结算/暂停等）时让位，避免文字重叠 */
+var DECK_BLOCKERS = ['menu','loading','hint','countdown','results','gameover','pause','fallback'];
+function syncDeck(){
+  var on = false;
+  for (var i=0;i<DECK_BLOCKERS.length;i++){ if (!$(DECK_BLOCKERS[i]).classList.contains('hidden')) { on = true; break; } }
+  document.body.classList.toggle('pm-overlay', on);
+}
 var scale = 1;
 function resize(){
   var vw = window.innerWidth, vh = window.innerHeight;
-  scale = Math.min(vw/W, vh/H);
+  /* 竖屏手机：画布贴顶、全宽，下半屏留给操作台；其余情况居中缩放 */
+  var pm = coarse && vh > vw;
+  document.body.classList.toggle('pmobile', pm);
+  if (pm){
+    scale = vw / W;
+    stage.style.left = '0px'; stage.style.top = '0px'; stage.style.transform = 'none';
+    stage.style.fontSize = '16px';
+  } else {
+    scale = Math.min(vw/W, vh/H);
+    stage.style.left = '50%'; stage.style.top = '50%'; stage.style.transform = 'translate(-50%,-50%)';
+    stage.style.fontSize = (16*scale)+'px';
+  }
   stage.style.width = (W*scale)+'px';
   stage.style.height = (H*scale)+'px';
-  stage.style.fontSize = (16*scale)+'px';
   var dpr = Math.min(window.devicePixelRatio||1, coarse?1.5:2);
   canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.imageSmoothingEnabled = true;
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   var tip = $('rotate-tip');
-  tip.style.display = (coarse && vh > vw) ? 'block' : 'none';
+  tip.style.display = pm ? 'block' : 'none';
+  syncDeck();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -470,14 +514,15 @@ function clearHitMemes(){
    落地后极短引线即爆炸，爆炸判定半径 200px，被炸到扣两颗心。
    素材：我的世界TNT（去绿幕）——下落用静态帧，爆炸用裁切的 GIF + 原视频爆炸音轨 */
 var TNT_TRIGGER_X = 3620;
+var TNT_DETECT_R = 260;       /* 靠近触发距离（世界像素）：玩家进入此范围 TNT 立即在头顶落下 */
 var TNT_BLAST_R = 200;        /* 爆炸判定范围（世界像素，以爆心为圆心的半径） */
 var TNT_FALL_GRAV = 3600;     /* 下落重力 */
-var TNT_FUSE = 0.15;          /* 落地后引线时长（秒） */
+var TNT_FUSE = 2.0;           /* 落地后引线时长（秒，闪白光倒计时给玩家跑开） */
 var TNT_BOOM_MS = 1800;       /* 爆炸演出时长（帧序列播完即移除） */
 var TNT_BOOM_FPS = 15, TNT_BOOM_FRAMES = 27, TNT_BOOM_COLS = 6;
 var TNT_CELL_W = 320, TNT_CELL_H = 180;
 var TNT_DRAW_W = 400, TNT_DRAW_H = 225;
-var tntFired = false, tnt = null, tntSnd = null, tntSndOk = false;
+var tntFired = false, tnt = null, tntSnd = null, tntSndOk = false, tntFlashCv = null;
 function groundYAt(x){
   for (var i=0;i<GROUND.length;i++){
     var s = GROUND[i];
@@ -487,7 +532,7 @@ function groundYAt(x){
 }
 function spawnTnt(x){
   var gy = groundYAt(x);
-  tnt = { x:x, y:-220, vy:0, t:0, state:'fall', restY: gy - 73 };
+  tnt = { x:x, y:-220, vy:0, t:0, state:'fall', restY: gy - 73, blink:false, beepIdx:-1 };
   tntSndOk = false;
   if (!tntSnd){
     tntSnd = new Audio();
@@ -509,14 +554,41 @@ function clearTnt(){
 }
 function pauseTntSnd(){ if (tntSnd && !tntSnd.paused){ try{ tntSnd.pause(); }catch(e){} } }
 function resumeTntSnd(){ if (tnt && tntSnd && tntSnd.paused){ var pr = tntSnd.play(); if (pr && pr.catch) pr.catch(function(){}); } }
+/* 引线倒计时“嘀”声（合成音，越临近爆炸越急促） */
+function playTntBeep(){
+  try {
+    AudioSys.ensure(); AudioSys.resume();
+    var ac = AudioSys.ac; if (!ac || !AudioSys.master) return;
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'square'; o.frequency.value = 1180;
+    o.connect(g); g.connect(AudioSys.master);
+    var t0 = ac.currentTime;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.10, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.10);
+    o.start(t0); o.stop(t0 + 0.11);
+  } catch(e){}
+}
 function updateTnt(dt){
   if (!tnt) return;
   tnt.t += dt;
   if (tnt.state === 'fall'){
     tnt.vy += TNT_FALL_GRAV*dt;
     tnt.y += tnt.vy*dt;
-    if (tnt.y >= tnt.restY){ tnt.y = tnt.restY; tnt.vy = 0; tnt.state = 'fuse'; tnt.t = 0; }
+    if (tnt.y >= tnt.restY){ tnt.y = tnt.restY; tnt.vy = 0; tnt.state = 'fuse'; tnt.t = 0; tnt.blink = false; tnt.beepIdx = -1; }
     return;
+  }
+  if (tnt.state === 'fuse'){
+    /* 闪白光倒计时：越接近爆炸闪得越快；每次闪白伴随一声“嘀” */
+    var remain = 1 - Math.max(0, Math.min(1, tnt.t / TNT_FUSE));
+    var period = 0.18 + 0.55*remain;
+    var vis = (tnt.t % period) < period*0.5;
+    var idx = Math.floor(tnt.t / period);
+    if (vis && idx !== tnt.beepIdx){
+      tnt.beepIdx = idx;
+      playTntBeep();
+    }
+    tnt.blink = vis;
   }
   if (tnt.state === 'fuse' && tnt.t >= TNT_FUSE){
     tnt.state = 'boom'; tnt.t = 0;
@@ -554,7 +626,23 @@ function drawTnt(){
       TNT_CELL_W, TNT_CELL_H, sx, sy, TNT_DRAW_W, TNT_DRAW_H);
   } else {
     if (!tntFallImg.complete) return;
-    ctx.drawImage(tntFallImg, sx, sy, TNT_DRAW_W, TNT_DRAW_H);
+    /* 引线阶段：TNT 微微抖动，并按倒计时闪白光（只染 TNT 本体，不染背景） */
+    var jy = (tnt.state === 'fuse') ? Math.sin(tnt.t*55)*1.6 : 0;
+    ctx.drawImage(tntFallImg, sx, sy + jy, TNT_DRAW_W, TNT_DRAW_H);
+    if (tnt.state === 'fuse' && tnt.blink){
+      if (!tntFlashCv) tntFlashCv = document.createElement('canvas');
+      if (tntFlashCv.width !== tntFallImg.width || tntFlashCv.height !== tntFallImg.height){
+        tntFlashCv.width = tntFallImg.width; tntFlashCv.height = tntFallImg.height;
+      }
+      var fc = tntFlashCv.getContext('2d');
+      fc.globalCompositeOperation = 'source-over';
+      fc.clearRect(0, 0, tntFlashCv.width, tntFlashCv.height);
+      fc.drawImage(tntFallImg, 0, 0);
+      fc.globalCompositeOperation = 'source-atop';
+      fc.fillStyle = 'rgba(255,255,255,0.8)';
+      fc.fillRect(0, 0, tntFlashCv.width, tntFlashCv.height);
+      ctx.drawImage(tntFlashCv, sx, sy + jy, TNT_DRAW_W, TNT_DRAW_H);
+    }
   }
 }
 
@@ -695,8 +783,8 @@ bindBtn($('btn-jump'), function(){ jumpQueued=true; }, function(){ if (frog.vy <
 if (coarse || 'ontouchstart' in window) $('touch').classList.remove('hidden');
 
 /* ================= 流程控制 ================= */
-function show(id){ $(id).classList.remove('hidden'); }
-function hide(id){ $(id).classList.add('hidden'); }
+function show(id){ $(id).classList.remove('hidden'); syncDeck(); }
+function hide(id){ $(id).classList.add('hidden'); syncDeck(); }
 function setState(s){ G.state = s; }
 
 function startGame(){
@@ -857,7 +945,8 @@ document.addEventListener('visibilitychange', function(){
 function updatePlay(dt){
   var i, p;
   /* TNT 炸弹事件：进入触发点且本局未触发过 → 在青蛙头顶落下 */
-  if (!tntFired && frog.x >= TNT_TRIGGER_X){ tntFired = true; spawnTnt(frog.x); }
+  /* 靠近即触发（而不是等跑过点）：玩家进入触发点 260px 范围，TNT 立刻在头顶落下 */
+  if (!tntFired && Math.abs(frog.x - TNT_TRIGGER_X) < TNT_DETECT_R){ tntFired = true; spawnTnt(frog.x); }
   updateTnt(dt);
   /* 移动平台 */
   for (i=0;i<MOVERS.length;i++){
@@ -1585,7 +1674,7 @@ window.__naiwa = {
   memeReady:function(){ return !!memeBuf; },
   boomReady:function(){ return !!boomBuf; },
   tntReady:function(){ return !!(tntFallImg.complete && tntBoomImg.complete); },
-  tnt:function(){ return tnt ? {x:tnt.x, y:tnt.y, t:tnt.t, state:tnt.state} : null; },
+  tnt:function(){ return tnt ? {x:tnt.x, y:tnt.y, t:tnt.t, state:tnt.state, blink:tnt.blink} : null; },
   tntFired:function(){ return tntFired; },
   bgmReady:function(){ return !!bgmBuf; },
   ohhReady:function(){ return !!ohhBuf; }
